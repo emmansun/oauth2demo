@@ -2,6 +2,8 @@ package org.person.emman.oauth2demo.manager;
 
 public class OAuthConfiguration {
   private String tokenEndpoint;
+  private String proxyHost;
+  private int proxyPort;
   private String clientId;
   private String clientSecret;
   private int connectTimeout = 0;
@@ -54,5 +56,21 @@ public class OAuthConfiguration {
 
   public void setTokenTimeoutWindow(long tokenTimeoutWindow) {
     this.tokenTimeoutWindow = tokenTimeoutWindow;
+  }
+
+  public String getProxyHost() {
+    return proxyHost;
+  }
+
+  public void setProxyHost(String proxyHost) {
+    this.proxyHost = proxyHost;
+  }
+
+  public int getProxyPort() {
+    return proxyPort;
+  }
+
+  public void setProxyPort(int proxyPort) {
+    this.proxyPort = proxyPort;
   }
 }

@@ -19,6 +19,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class OAuthAccessTokenManagerImpl implements OAuthAccessTokenManager {
+  public static final String EDGEMICRO_AUTH_TOKEN = "/edgemicro-auth/token";
   private static Logger LOGGER = LoggerFactory.getLogger(OAuthAccessTokenManagerImpl.class);
   private static final String NO_SCOPE = "[]";
   private OAuthConfiguration configuration;
@@ -114,11 +115,21 @@ public class OAuthAccessTokenManagerImpl implements OAuthAccessTokenManager {
   private BearerAccessToken obtainAccessToken(String[] scopes) throws IOException {
     BearerAccessToken token = null;
     HTTPRequest request;
+    boolean isEdgeMicroAuth = false;
     try {
       URI uri = new URI(this.configuration.getTokenEndpoint());
       LOGGER.debug("Obtaining access token from: {}", this.configuration.getTokenEndpoint());
-      request =
-        (new TokenRequest(uri, this.authType, this.grantType, new Scope(scopes))).toHTTPRequest();
+      if (this.configuration.getTokenEndpoint().contains(EDGEMICRO_AUTH_TOKEN)) {
+        request = new ApigeeMicroGatewayTokenRequest(uri, this.clientId, this.configuration.getClientSecret(), this.grantType, new Scope(scopes)).toHTTPRequest();
+        isEdgeMicroAuth = true;
+      } else {
+        request = (new TokenRequest(uri, this.authType, this.grantType, new Scope(scopes))).toHTTPRequest();
+      }
+      if (this.configuration.getProxyHost() != null
+        && this.configuration.getProxyHost().trim().length() > 0) {
+        request = new ProxyHTTPRequest(request, this.configuration.getProxyHost().trim(),
+          this.configuration.getProxyPort());
+      }
     } catch (Exception e) {
       throw new IOException(e.getMessage(), e);
     }
@@ -127,11 +138,15 @@ public class OAuthAccessTokenManagerImpl implements OAuthAccessTokenManager {
     TokenResponse response;
     try {
       HTTPResponse httpResponse = request.send();
-      if (httpResponse.getContent() != null && !httpResponse.getContent().isEmpty()) {
+      if (!isEdgeMicroAuth && httpResponse.getContent() != null && !httpResponse.getContent().isEmpty()) {
         httpResponse.setContent(
           httpResponse.getContent().replaceAll("BearerToken", AccessTokenType.BEARER.getValue()));
       }
-      response = TokenResponse.parse(httpResponse);
+      if (isEdgeMicroAuth) {
+        response = ApigeeMicroGatewayTokenRequest.parseResponse(httpResponse);
+      } else {
+        response = TokenResponse.parse(httpResponse);
+      }
       if (!response.indicatesSuccess()) {
         LOGGER.error("Access token request failed, HTTP response: {}-{}", httpResponse.getContent(),
           httpResponse.getStatusCode());

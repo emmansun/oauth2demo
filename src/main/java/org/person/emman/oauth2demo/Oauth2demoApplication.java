@@ -10,14 +10,14 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import java.io.BufferedReader;
+import javax.net.ssl.*;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.ProtocolException;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.X509Certificate;
 
 @SpringBootApplication public class Oauth2demoApplication implements CommandLineRunner {
   private static Logger LOGGER = LoggerFactory.getLogger(Oauth2demoApplication.class);
@@ -26,7 +26,12 @@ import java.nio.charset.Charset;
 
   @Autowired private OAuthAccessTokenManager oauthAccessTokenManager;
 
-  private void accessApi(String authorization) throws IOException {
+  private void accessApi(String authorization)
+    throws IOException, NoSuchAlgorithmException, KeyManagementException {
+    SSLContext sc = SSLContext.getInstance("SSL");
+    sc.init(null, getTrustAllManagers(), new java.security.SecureRandom());
+    HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+    HttpsURLConnection.setDefaultHostnameVerifier(ignoreHostnameVerifier());
     URL url = new URL(sampleApiUri);
     HttpURLConnection con = null;
     try {
@@ -47,6 +52,27 @@ import java.nio.charset.Charset;
     }
   }
 
+  private HostnameVerifier ignoreHostnameVerifier() {
+    return new HostnameVerifier() {
+        public boolean verify(String hostname, SSLSession session) {
+          return true;
+        }
+      };
+  }
+
+  private TrustManager[] getTrustAllManagers() {
+    return new TrustManager[] {new X509TrustManager() {
+        public X509Certificate[] getAcceptedIssuers() {
+          return null;
+        }
+        public void checkClientTrusted(X509Certificate[] certs, String authType) {
+        }
+        public void checkServerTrusted(X509Certificate[] certs, String authType) {
+        }
+      }
+      };
+  }
+
   public static void main(String[] args) {
     LOGGER.info("STARTING THE APPLICATION");
     SpringApplication.run(Oauth2demoApplication.class, args);
@@ -61,9 +87,9 @@ import java.nio.charset.Charset;
     }
     LOGGER.info("Access token: {}", oauthAccessTokenManager.getAccessToken());
     LOGGER.info("Access token (from cache): {}", oauthAccessTokenManager.getAccessToken());
-    LOGGER.info("Request API without access token");
+    LOGGER.info("1.Request API without access token");
     accessApi(null);
-    LOGGER.info("Request API with access token");
+    LOGGER.info("2.Request API with access token");
     accessApi(oauthAccessTokenManager.getAccessTokenHttpHeader());
   }
 }

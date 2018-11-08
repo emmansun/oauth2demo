@@ -12,9 +12,11 @@ import com.nimbusds.oauth2.sdk.token.BearerAccessToken;
 import org.person.emman.oauth2demo.Oauth2demoApplication;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cglib.proxy.Enhancer;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -112,6 +114,18 @@ public class OAuthAccessTokenManagerImpl implements OAuthAccessTokenManager {
     }
   }
 
+  private HTTPRequest createProxy(HTTPRequest request) {
+    if (this.configuration.getProxyHost() != null
+      && this.configuration.getProxyHost().trim().length() > 0) {
+      Enhancer enhancer = new Enhancer();
+      enhancer.setSuperclass(HTTPRequest.class);
+      enhancer.setCallback(new HttpRequestInterceptor(this.configuration.getProxyHost().trim(), this.configuration.getProxyPort()));
+
+      return (HTTPRequest) enhancer.create(new Class[]{HTTPRequest.Method.class, URL.class}, new Object[]{request.getMethod(), request.getURL()});
+    }
+    return request;
+  }
+
   private BearerAccessToken obtainAccessToken(String[] scopes) throws IOException {
     BearerAccessToken token = null;
     HTTPRequest request;
@@ -125,11 +139,7 @@ public class OAuthAccessTokenManagerImpl implements OAuthAccessTokenManager {
       } else {
         request = (new TokenRequest(uri, this.authType, this.grantType, new Scope(scopes))).toHTTPRequest();
       }
-      if (this.configuration.getProxyHost() != null
-        && this.configuration.getProxyHost().trim().length() > 0) {
-        request = new ProxyHTTPRequest(request, this.configuration.getProxyHost().trim(),
-          this.configuration.getProxyPort());
-      }
+      request = createProxy(request);
     } catch (Exception e) {
       throw new IOException(e.getMessage(), e);
     }
@@ -148,8 +158,7 @@ public class OAuthAccessTokenManagerImpl implements OAuthAccessTokenManager {
         response = TokenResponse.parse(httpResponse);
       }
       if (!response.indicatesSuccess()) {
-        LOGGER.error("Access token request failed, HTTP response: {}-{}", httpResponse.getContent(),
-          httpResponse.getStatusCode());
+        LOGGER.error("Access token request failed, HTTP response: {}-{}", httpResponse.getStatusCode(), httpResponse.getContent());
         String errorText = null;
         String errorDesc = null;
         if (response instanceof TokenErrorResponse) {
